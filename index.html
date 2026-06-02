@@ -900,32 +900,6 @@ Example: [{"name":"Chicken Rice","price":4.50},{"name":"Teh Tarik","price":1.80}
   }
 }
 
-    if (!response.ok) {
-      const errBody = await response.json().catch(() => ({}));
-      throw new Error(errBody?.error?.message || `HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-
-    const raw = data.content.map(b => b.text || '').join('').trim()
-      .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-
-    scannedItems = JSON.parse(raw);
-    if (!Array.isArray(scannedItems) || scannedItems.length === 0) throw new Error('No items found in receipt');
-
-    const list = scannedItems.map(i => `${i.name} — $${parseFloat(i.price).toFixed(2)}`).join('\n');
-    status.className = 'scan-status success';
-    status.innerHTML = `✅ Found ${scannedItems.length} item${scannedItems.length > 1 ? 's' : ''}:<br><span style="white-space:pre-line;font-size:12px;">${list}</span>`;
-    confirmBtn.style.display = '';
-
-  } catch (err) {
-    console.error('Scan error:', err);
-    status.className = 'scan-status error';
-    status.textContent = `❌ ${err.message || 'Could not read receipt'}. Please try again or add items manually.`;
-  }
-}
-
 function confirmScan() {
   scannedItems.forEach(si => {
     const id = ++itemId;
