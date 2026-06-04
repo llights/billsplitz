@@ -406,13 +406,23 @@
   <div id="scan-modal" onclick="handleModalBackdrop(event)">
     <div class="scan-sheet">
       <h2><i class="ti ti-camera" style="color:var(--accent);"></i> Scan Receipt</h2>
-      <div class="scan-drop" id="scan-drop" onclick="document.getElementById('scan-file-input').click()">
+      <div class="scan-drop" id="scan-drop">
         <i class="ti ti-photo-scan"></i>
-        <span>Tap to take a photo or upload receipt</span>
-        <span style="font-size:12px;">JPG, PNG supported</span>
+        <span>Choose how to add your receipt</span>
+        <div style="display:flex;gap:10px;margin-top:6px;width:100%;">
+          <button style="flex:1;justify-content:center;flex-direction:column;gap:4px;padding:12px 8px;" onclick="document.getElementById('scan-camera-input').click()">
+            <i class="ti ti-camera" style="font-size:22px;"></i>
+            <span style="font-size:12px;">Take Photo</span>
+          </button>
+          <button style="flex:1;justify-content:center;flex-direction:column;gap:4px;padding:12px 8px;" onclick="document.getElementById('scan-file-input').click()">
+            <i class="ti ti-photo" style="font-size:22px;"></i>
+            <span style="font-size:12px;">Choose Photo</span>
+          </button>
+        </div>
       </div>
       <img id="scan-preview" class="scan-preview" alt="Receipt preview" />
-      <input type="file" id="scan-file-input" accept="image/*" capture="environment" style="display:none;" onchange="handleScanFile(this)" />
+      <input type="file" id="scan-camera-input" accept="image/*" capture="environment" style="display:none;" onchange="handleScanFile(this)" />
+      <input type="file" id="scan-file-input" accept="image/*" style="display:none;" onchange="handleScanFile(this)" />
       <p class="scan-status" id="scan-status"></p>
       <div class="scan-actions">
         <button onclick="closeScanModal()"><i class="ti ti-x"></i> Cancel</button>
@@ -730,18 +740,18 @@ function resetAll() {
 
 // ── API Key ───────────────────────────────────────────────
 function getApiKey() {
-  try { return localStorage.getItem('bs_gemini_key') || ''; } catch(e) { return ''; }
+  try { return localStorage.getItem('bs_groq_key') || ''; } catch(e) { return ''; }
 }
 function saveApiKey(key) {
-  try { localStorage.setItem('bs_gemini_key', key.trim()); } catch(e) {}
+  try { localStorage.setItem('bs_groq_key', key.trim()); } catch(e) {}
 }
 function openSettings() {
   const current = getApiKey();
-  const key = prompt('Enter your Google Gemini API key:\n\nGet a FREE key at aistudio.google.com → Sign in with Google → Get API key', current);
+  const key = prompt('Enter your Groq API key:\n\nGet a FREE key at console.groq.com → Sign in → API Keys → Create API key', current);
   if (key === null) return;
   if (key.trim()) {
     saveApiKey(key.trim());
-    alert('✅ Gemini API key saved! You can now use Scan Receipt.');
+    alert('✅ Groq API key saved! You can now use Scan Receipt.');
   } else {
     if (confirm('Remove saved API key?')) saveApiKey('');
   }
@@ -761,10 +771,11 @@ function openScanModal() {
   document.getElementById('scan-status').className = 'scan-status';
   document.getElementById('scan-confirm-btn').style.display = 'none';
   document.getElementById('scan-file-input').value = '';
+  document.getElementById('scan-camera-input').value = '';
 
   if (!getApiKey()) {
     document.getElementById('scan-status').className = 'scan-status error';
-    document.getElementById('scan-status').textContent = '⚠️ No API key set. Tap ⚙️ in the header first to add your free Gemini API key.';
+    document.getElementById('scan-status').textContent = '⚠️ No API key set. Tap ⚙️ in the header first to add your free Groq API key.';
   }
 
   document.getElementById('scan-modal').classList.add('open');
@@ -836,26 +847,30 @@ async function analyseReceipt() {
     const apiKey = getApiKey();
     if (!apiKey) {
       status.className = 'scan-status error';
-      status.textContent = '❌ No API key set. Tap ⚙️ in the header to add your free Gemini API key.';
+      status.textContent = '❌ No API key set. Tap ⚙️ in the header to add your free Groq API key.';
       return;
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                inline_data: {
-                  mime_type: 'image/jpeg',
-                  data: scanImageBase64
-                }
-              },
-              {
-                text: `You are a receipt parser. Extract every line item from this receipt image.
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        max_tokens: 1000,
+        temperature: 0.1,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: `data:image/jpeg;base64,${scanImageBase64}` }
+            },
+            {
+              type: 'text',
+              text: `You are a receipt parser. Extract every line item from this receipt image.
 Return ONLY a JSON array, no explanation, no markdown, no extra text, no code fences.
 Each object must have:
 - "name": string (item name, keep it short)
@@ -863,13 +878,11 @@ Each object must have:
 Ignore subtotals, totals, tax lines, service charge lines, discounts, and headers.
 Only include individual food/drink/product items.
 Example: [{"name":"Chicken Rice","price":4.50},{"name":"Teh Tarik","price":1.80}]`
-              }
-            ]
-          }],
-          generationConfig: { temperature: 0.1 }
-        })
-      }
-    );
+            }
+          ]
+        }]
+      })
+    });
 
     if (!response.ok) {
       const errBody = await response.json().catch(() => ({}));
@@ -878,7 +891,7 @@ Example: [{"name":"Chicken Rice","price":4.50},{"name":"Teh Tarik","price":1.80}
     }
 
     const data = await response.json();
-    const raw = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '')
+    const raw = (data?.choices?.[0]?.message?.content || '')
       .trim()
       .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '')
       .trim();
