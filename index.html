@@ -251,7 +251,7 @@
   }
   .qty-total-hint.warn { color: var(--warn-text); }
 
-  .extras-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .extras-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   .field label { font-size: 13px; color: var(--text2); display: block; margin-bottom: 5px; }
 
   .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
@@ -295,9 +295,10 @@
     .summary-grid { grid-template-columns: repeat(3,1fr); }
     .item-top { grid-template-columns: 1fr 80px; }
     .result-amount { font-size: 18px; }
+    .extras-grid { grid-template-columns: 1fr 1fr; }
   }
 
-  /* Scan receipt */
+  /* ── Scan receipt ── */
   .scan-btn {
     width: 100%;
     justify-content: center;
@@ -327,6 +328,8 @@
     padding: 20px 20px 36px;
     width: 100%;
     max-width: 680px;
+    max-height: 90dvh;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -334,7 +337,7 @@
   .scan-sheet h2 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
   .scan-preview {
     width: 100%;
-    max-height: 220px;
+    max-height: 180px;
     object-fit: contain;
     border-radius: var(--radius);
     border: 0.5px solid var(--border);
@@ -347,7 +350,6 @@
     text-align: center;
     font-size: 14px;
     color: var(--text2);
-    cursor: pointer;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -365,6 +367,34 @@
   .scan-actions { display: flex; gap: 8px; }
   .scan-actions button { flex: 1; justify-content: center; }
   .scan-actions button.primary { flex: 2; }
+
+  /* Editable scanned items list */
+  .scan-items-list { display: flex; flex-direction: column; gap: 6px; }
+  .scan-item-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    background: var(--bg2);
+    border-radius: var(--radius);
+    padding: 6px 8px;
+  }
+  .scan-item-row input[type="text"] { flex: 1; font-size: 13px; padding: 5px 8px; }
+  .scan-item-row input[type="number"] { width: 76px; font-size: 13px; padding: 5px 8px; flex-shrink: 0; }
+  .scan-item-row button { padding: 5px 8px; }
+
+  /* Currency selector */
+  .currency-select {
+    background: none;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: var(--radius);
+    width: auto;
+  }
+  .currency-select:focus { box-shadow: none; border-color: transparent; }
 </style>
 </head>
 <body>
@@ -373,7 +403,21 @@
   <i class="ti ti-receipt-2" style="font-size:22px;color:var(--accent);"></i>
   <h1>Bill Splitter</h1>
   <span class="sub" id="item-count"></span>
-  <button onclick="openSettings()" style="margin-left:auto;background:none;border:none;padding:6px;color:var(--text2);" title="API Key settings"><i class="ti ti-settings" style="font-size:20px;"></i></button>
+  <select class="currency-select" id="currency-select" onchange="onCurrencyChange(this.value)" title="Currency">
+    <option value="$">$</option>
+    <option value="S$">S$</option>
+    <option value="RM">RM</option>
+    <option value="£">£</option>
+    <option value="€">€</option>
+    <option value="¥">¥</option>
+    <option value="₩">₩</option>
+    <option value="₹">₹</option>
+    <option value="฿">฿</option>
+    <option value="₫">₫</option>
+    <option value="A$">A$</option>
+    <option value="HK$">HK$</option>
+  </select>
+  <button onclick="openSettings()" style="background:none;border:none;padding:6px;color:var(--text2);" title="API Key settings"><i class="ti ti-settings" style="font-size:20px;"></i></button>
 </header>
 
 <main>
@@ -406,6 +450,7 @@
   <div id="scan-modal" onclick="handleModalBackdrop(event)">
     <div class="scan-sheet">
       <h2><i class="ti ti-camera" style="color:var(--accent);"></i> Scan Receipt</h2>
+
       <div class="scan-drop" id="scan-drop">
         <i class="ti ti-photo-scan"></i>
         <span>Choose how to add your receipt</span>
@@ -420,13 +465,26 @@
           </button>
         </div>
       </div>
+
       <img id="scan-preview" class="scan-preview" alt="Receipt preview" />
       <input type="file" id="scan-camera-input" accept="image/*" capture="environment" style="display:none;" onchange="handleScanFile(this)" />
       <input type="file" id="scan-file-input" accept="image/*" style="display:none;" onchange="handleScanFile(this)" />
+
       <p class="scan-status" id="scan-status"></p>
+
+      <!-- Editable items list shown after scan -->
+      <div id="scan-items-editor" style="display:none;">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Review and edit items before adding:</div>
+        <div class="scan-items-list" id="scan-items-list"></div>
+        <button onclick="addScanItemRow()" style="width:100%;justify-content:center;margin-top:6px;font-size:13px;padding:7px;">
+          <i class="ti ti-plus"></i> Add row
+        </button>
+      </div>
+
       <div class="scan-actions">
         <button onclick="closeScanModal()"><i class="ti ti-x"></i> Cancel</button>
-        <button class="primary" id="scan-confirm-btn" onclick="confirmScan()" style="display:none;"><i class="ti ti-check"></i> Add these items</button>
+        <button onclick="reScan()" id="scan-retry-btn" style="display:none;"><i class="ti ti-refresh"></i> Re-scan</button>
+        <button class="primary" id="scan-confirm-btn" onclick="confirmScan()" style="display:none;"><i class="ti ti-check"></i> Add items</button>
       </div>
     </div>
   </div>
@@ -442,10 +500,17 @@
         <label>GST / Tax (%)</label>
         <input type="number" id="gst" value="9" min="0" max="100" step="0.5" oninput="calculate()" />
       </div>
+      <div class="field">
+        <label>Rounding</label>
+        <select id="rounding-select" onchange="calculate()">
+          <option value="none">None</option>
+          <option value="0.05">5¢</option>
+          <option value="0.10">10¢</option>
+          <option value="1.00">$1</option>
+        </select>
+      </div>
     </div>
   </div>
-
-  <button class="primary" onclick="calculate()"><i class="ti ti-calculator"></i> Calculate split</button>
 
   <div class="card" id="results-section" style="display:none;">
     <p class="card-title"><i class="ti ti-chart-pie"></i> Split summary</p>
@@ -463,9 +528,18 @@
 let people = [];
 let items = [];
 let itemId = 0;
+let currency = '$';
 
+// ── Helpers ────────────────────────────────────────────────
+function haptic() { try { navigator.vibrate && navigator.vibrate(8); } catch(e){} }
+
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Persistence ───────────────────────────────────────────
 function saveDraft() {
-  try { localStorage.setItem('bs_draft', JSON.stringify({people, items, itemId})); } catch(e){}
+  try { localStorage.setItem('bs_draft', JSON.stringify({people, items, itemId, currency})); } catch(e){}
 }
 function loadDraft() {
   try {
@@ -474,24 +548,100 @@ function loadDraft() {
       people = d.people||[];
       items = (d.items||[]).map(item => ({ personQty: {}, ...item }));
       itemId = d.itemId||0;
+      currency = d.currency || '$';
     }
   } catch(e){}
 }
 
+// ── Currency ──────────────────────────────────────────────
+function onCurrencyChange(val) {
+  haptic();
+  currency = val;
+  saveDraft();
+  calculate();
+  updateCount();
+}
+
+function fmt(n) { return currency + n.toFixed(2); }
+
+// ── Shared calculation logic ───────────────────────────────
+function runCalculation() {
+  const sc = parseFloat(document.getElementById('service-charge').value)||0;
+  const gst = parseFloat(document.getElementById('gst').value)||0;
+  const multiplier = (1 + sc/100) * (1 + gst/100);
+  const roundStep = parseFloat(document.getElementById('rounding-select').value)||0;
+
+  let taxableSubtotal = 0, noTaxSubtotal = 0;
+  items.forEach(item => {
+    const p = parseFloat(item.price)||0;
+    if (item.taxable) taxableSubtotal += p; else noTaxSubtotal += p;
+  });
+
+  const personTotals = {};
+  const personItems = {};
+  people.forEach(p => { personTotals[p] = 0; personItems[p] = []; });
+
+  items.forEach(item => {
+    const price = parseFloat(item.price)||0;
+    if (item.splitMode === 'qty') {
+      const totalQty = people.reduce((s, p) => s + (parseFloat(item.personQty[p]) || 0), 0);
+      if (!totalQty) return;
+      people.forEach(p => {
+        const pQty = parseFloat(item.personQty[p]) || 0;
+        if (!pQty) return;
+        let share = price * (pQty / totalQty);
+        if (item.taxable) share *= multiplier;
+        personTotals[p] += share;
+        personItems[p].push(`${item.name||'Item'} ×${pQty} (${fmt(share)}${item.taxable?'':' · no tax'})`);
+      });
+    } else {
+      const split = item.persons.filter(p => people.includes(p));
+      if (!split.length) return;
+      const share = (price / split.length) * (item.taxable ? multiplier : 1);
+      split.forEach((p, idx) => {
+        // Rounding correction: last person absorbs the penny difference
+        const isLast = idx === split.length - 1;
+        const rawTotal = share * split.length;
+        const assigned = share * idx;
+        const lastShare = isLast ? rawTotal - assigned : share;
+        personTotals[p] += lastShare;
+        personItems[p].push(`${item.name||'Item'} (${fmt(lastShare)}${item.taxable?'':' · no tax'})`);
+      });
+    }
+  });
+
+  // Apply rounding per person
+  if (roundStep > 0) {
+    people.forEach(p => {
+      personTotals[p] = Math.ceil(personTotals[p] / roundStep) * roundStep;
+    });
+  }
+
+  const taxableAfter = taxableSubtotal * multiplier;
+  const grandTotal = taxableAfter + noTaxSubtotal;
+
+  return { personTotals, personItems, taxableSubtotal, noTaxSubtotal, grandTotal };
+}
+
+// ── People ────────────────────────────────────────────────
 function addPerson() {
+  haptic();
   const input = document.getElementById('person-input');
   const name = input.value.trim();
   if (!name || people.includes(name)) { input.focus(); return; }
   people.push(name);
   input.value = '';
+  input.blur(); // dismiss keyboard on mobile
   items.forEach(item => {
     if (item.splitMode === 'all') item.persons = [...people];
     if (item.splitMode === 'qty' && item.personQty[name] === undefined) item.personQty[name] = 0;
   });
-  renderPeople(); renderItems(); saveDraft();
+  renderPeople(); renderItems(); calculate(); saveDraft();
 }
 
-function removePerson(name) {
+function removePerson(idx) {
+  haptic();
+  const name = people[idx];
   people = people.filter(p => p !== name);
   items.forEach(item => {
     item.persons = item.persons.filter(p => p !== name);
@@ -503,11 +653,13 @@ function removePerson(name) {
 
 function renderPeople() {
   document.getElementById('people-tags').innerHTML = people.length
-    ? people.map(p => `<span class="tag"><i class="ti ti-user" style="font-size:13px;"></i>${p}<button onclick="removePerson('${p}')" aria-label="Remove ${p}"><i class="ti ti-x"></i></button></span>`).join('')
+    ? people.map((p, idx) => `<span class="tag"><i class="ti ti-user" style="font-size:13px;"></i>${escAttr(p)}<button onclick="removePerson(${idx})" aria-label="Remove"><i class="ti ti-x"></i></button></span>`).join('')
     : '<span style="font-size:13px;color:var(--text2);">No people added yet.</span>';
 }
 
+// ── Items ─────────────────────────────────────────────────
 function addItem() {
+  haptic();
   const id = ++itemId;
   const personQty = {};
   people.forEach(p => { personQty[p] = 0; });
@@ -516,6 +668,7 @@ function addItem() {
 }
 
 function removeItem(id) {
+  haptic();
   items = items.filter(i => i.id !== id);
   renderItems(); calculate(); saveDraft();
 }
@@ -533,18 +686,18 @@ function renderItems() {
           ? '<span style="font-size:12px;color:var(--text2);">Add people first</span>'
           : `<div class="qty-split-grid">${people.map(p => `
               <div class="qty-person-row">
-                <span class="qty-person-name"><i class="ti ti-user" style="font-size:11px;color:var(--text2);"></i>${p}</span>
-                <input type="number" class="qty-input" placeholder="0" value="${item.personQty[p] || ''}" min="0" step="1" oninput="updatePersonQty(${item.id},'${p}',this.value)" />
+                <span class="qty-person-name"><i class="ti ti-user" style="font-size:11px;color:var(--text2);"></i>${escAttr(p)}</span>
+                <input type="number" class="qty-input" placeholder="0" value="${item.personQty[p] || ''}" min="0" step="1" oninput="updatePersonQty(${item.id},${people.indexOf(p)},this.value)" />
               </div>`).join('')}</div>${qtyHint}`)
-      : `${people.map(p => `
+      : `${people.map((p, idx) => `
           <label class="cb-label">
-            <input type="checkbox" ${item.persons.includes(p) ? 'checked' : ''} onchange="togglePerson(${item.id},'${p}',this.checked)" />${p}
+            <input type="checkbox" ${item.persons.includes(p) ? 'checked' : ''} onchange="togglePerson(${item.id},${idx},this.checked)" />${escAttr(p)}
           </label>`).join('')}
         ${people.length === 0 ? '<span style="font-size:12px;color:var(--text2);">Add people first</span>' : ''}`;
     return `
     <div class="item-block" id="block-${item.id}">
       <div class="item-top">
-        <input type="text" placeholder="Item name…" value="${item.name}" oninput="updateItem(${item.id},'name',this.value)" />
+        <input type="text" placeholder="Item name…" value="${escAttr(item.name)}" oninput="updateItem(${item.id},'name',this.value)" />
         <input type="number" placeholder="0.00" value="${item.price}" min="0" step="0.01" oninput="updateItem(${item.id},'price',this.value)" />
       </div>
       <div class="item-controls">
@@ -572,7 +725,7 @@ function renderItems() {
 function updateCount() {
   const total = items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);
   document.getElementById('item-count').textContent = items.length
-    ? `${items.length} item${items.length>1?'s':''} · $${total.toFixed(2)}`
+    ? `${items.length} item${items.length>1?'s':''} · ${fmt(total)}`
     : '';
 }
 
@@ -581,7 +734,7 @@ function updateItem(id, field, val) {
   if (!item) return;
   item[field] = val;
   if (field === 'taxable') renderItems();
-  updateCount(); saveDraft();
+  updateCount(); calculate(); saveDraft();
 }
 
 function updateSplitMode(id, mode) {
@@ -593,134 +746,56 @@ function updateSplitMode(id, mode) {
   } else if (mode === 'qty') {
     people.forEach(p => { if (item.personQty[p] === undefined) item.personQty[p] = 0; });
   }
-  renderItems(); saveDraft();
+  renderItems(); calculate(); saveDraft();
 }
 
-function togglePerson(id, name, checked) {
+function togglePerson(id, personIdx, checked) {
   const item = items.find(i => i.id === id);
   if (!item) return;
+  const name = people[personIdx];
+  if (!name) return;
   if (checked) { if (!item.persons.includes(name)) item.persons.push(name); }
   else { item.persons = item.persons.filter(p => p !== name); }
-  saveDraft();
+  calculate(); saveDraft();
 }
 
-function updatePersonQty(id, person, val) {
+function updatePersonQty(id, personIdx, val) {
   const item = items.find(i => i.id === id);
   if (!item) return;
-  item.personQty[person] = parseFloat(val) || 0;
-  updateCount(); saveDraft();
+  const name = people[personIdx];
+  if (!name) return;
+  item.personQty[name] = parseFloat(val) || 0;
+  updateCount(); calculate(); saveDraft();
 }
 
+// ── Calculate ─────────────────────────────────────────────
 function calculate() {
   if (!people.length || !items.length) { document.getElementById('results-section').style.display='none'; return; }
-  const sc = parseFloat(document.getElementById('service-charge').value)||0;
-  const gst = parseFloat(document.getElementById('gst').value)||0;
-  const multiplier = (1 + sc/100) * (1 + gst/100);
 
-  let taxableSubtotal = 0, noTaxSubtotal = 0;
-  items.forEach(item => {
-    const p = parseFloat(item.price)||0;
-    if (item.taxable) taxableSubtotal += p; else noTaxSubtotal += p;
-  });
-
-  const personTotals = {};
-  const personItems = {};
-  people.forEach(p => { personTotals[p] = 0; personItems[p] = []; });
-
-  items.forEach(item => {
-    const price = parseFloat(item.price)||0;
-
-    if (item.splitMode === 'qty') {
-      const totalQty = people.reduce((s, p) => s + (parseFloat(item.personQty[p]) || 0), 0);
-      if (!totalQty) return;
-      people.forEach(p => {
-        const pQty = parseFloat(item.personQty[p]) || 0;
-        if (!pQty) return;
-        let share = price * (pQty / totalQty);
-        if (item.taxable) share *= multiplier;
-        personTotals[p] += share;
-        personItems[p].push(`${item.name||'Item'} ×${pQty} ($${share.toFixed(2)}${item.taxable?'':' · no tax'})`);
-      });
-    } else {
-      const split = item.persons.filter(p => people.includes(p));
-      if (!split.length) return;
-      let share;
-      if (item.taxable) {
-        share = price / split.length * multiplier;
-      } else {
-        share = price / split.length;
-      }
-      split.forEach(p => {
-        personTotals[p] += share;
-        personItems[p].push(`${item.name||'Item'} ($${share.toFixed(2)}${item.taxable?'':' · no tax'})`);
-      });
-    }
-  });
-
-  const taxableAfter = taxableSubtotal * multiplier;
-  const grandTotal = taxableAfter + noTaxSubtotal;
+  const { personTotals, personItems, taxableSubtotal, noTaxSubtotal, grandTotal } = runCalculation();
 
   document.getElementById('summary-grid').innerHTML = `
-    <div class="metric"><div class="metric-label">Taxable</div><div class="metric-value">$${taxableSubtotal.toFixed(2)}</div></div>
-    <div class="metric"><div class="metric-label">Tax-free</div><div class="metric-value">$${noTaxSubtotal.toFixed(2)}</div></div>
-    <div class="metric"><div class="metric-label">Total</div><div class="metric-value">$${grandTotal.toFixed(2)}</div></div>`;
+    <div class="metric"><div class="metric-label">Taxable</div><div class="metric-value">${fmt(taxableSubtotal)}</div></div>
+    <div class="metric"><div class="metric-label">Tax-free</div><div class="metric-value">${fmt(noTaxSubtotal)}</div></div>
+    <div class="metric"><div class="metric-label">Total</div><div class="metric-value">${fmt(grandTotal)}</div></div>`;
 
   document.getElementById('results-list').innerHTML = people.map(p => `
     <div class="result-card">
       <div style="flex:1;min-width:0;">
-        <div class="result-name"><i class="ti ti-user" style="font-size:15px;color:var(--accent);"></i>${p}</div>
+        <div class="result-name"><i class="ti ti-user" style="font-size:15px;color:var(--accent);"></i>${escAttr(p)}</div>
         <div class="result-items">${personItems[p].join('<br>')||'No items assigned'}</div>
       </div>
-      <div class="result-amount">$${personTotals[p].toFixed(2)}</div>
+      <div class="result-amount">${fmt(personTotals[p])}</div>
     </div>`).join('');
 
   document.getElementById('results-section').style.display='block';
 }
 
 function shareResults() {
-  const sc = parseFloat(document.getElementById('service-charge').value)||0;
-  const gst = parseFloat(document.getElementById('gst').value)||0;
-  const multiplier = (1 + sc/100) * (1 + gst/100);
-  let taxableSubtotal = 0, noTaxSubtotal = 0;
-  items.forEach(item => {
-    const p = parseFloat(item.price)||0;
-    if (item.taxable) taxableSubtotal += p; else noTaxSubtotal += p;
-  });
-  const taxableAfter = taxableSubtotal * multiplier;
-  const grandTotal = taxableAfter + noTaxSubtotal;
-
-  const personTotals = {};
-  const personItems = {};
-  people.forEach(p => { personTotals[p] = 0; personItems[p] = []; });
-  items.forEach(item => {
-    const price = parseFloat(item.price)||0;
-    if (item.splitMode === 'qty') {
-      const totalQty = people.reduce((s, p) => s + (parseFloat(item.personQty[p]) || 0), 0);
-      if (!totalQty) return;
-      people.forEach(p => {
-        const pQty = parseFloat(item.personQty[p]) || 0;
-        if (!pQty) return;
-        let share = price * (pQty / totalQty);
-        if (item.taxable) share *= multiplier;
-        personTotals[p] += share;
-        personItems[p].push(`  - ${item.name||'Item'} ×${pQty}: $${share.toFixed(2)}`);
-      });
-    } else {
-      const split = item.persons.filter(p => people.includes(p));
-      if (!split.length) return;
-      let share;
-      if (item.taxable) {
-        share = price / split.length * multiplier;
-      } else {
-        share = price / split.length;
-      }
-      split.forEach(p => { personTotals[p] += share; personItems[p].push(`  - ${item.name||'Item'}: $${share.toFixed(2)}`); });
-    }
-  });
-
-  let text = `Bill Split Summary\nTotal: $${grandTotal.toFixed(2)}\n\n`;
-  people.forEach(p => { text += `${p}: $${personTotals[p].toFixed(2)}\n${personItems[p].join('\n')}\n\n`; });
-
+  haptic();
+  const { personTotals, personItems, grandTotal } = runCalculation();
+  let text = `Bill Split Summary\nTotal: ${fmt(grandTotal)}\n\n`;
+  people.forEach(p => { text += `${p}: ${fmt(personTotals[p])}\n${personItems[p].map(i=>'  - '+i).join('\n')}\n\n`; });
   if (navigator.share) {
     navigator.share({ title: 'Bill Split', text: text.trim() }).catch(()=>{});
   } else {
@@ -730,6 +805,7 @@ function shareResults() {
 
 function resetAll() {
   if (!confirm('Reset everything?')) return;
+  haptic();
   people = []; items = []; itemId = 0;
   renderPeople(); renderItems();
   document.getElementById('results-section').style.display='none';
@@ -746,6 +822,7 @@ function saveApiKey(key) {
   try { localStorage.setItem('bs_groq_key', key.trim()); } catch(e) {}
 }
 function openSettings() {
+  haptic();
   const current = getApiKey();
   const key = prompt('Enter your Groq API key:\n\nGet a FREE key at console.groq.com → Sign in → API Keys → Create API key', current);
   if (key === null) return;
@@ -756,13 +833,31 @@ function openSettings() {
     if (confirm('Remove saved API key?')) saveApiKey('');
   }
 }
-// ─────────────────────────────────────────────────────────
+
+// ── Scan quota guard ──────────────────────────────────────
+function getScanCount() {
+  try {
+    const d = JSON.parse(localStorage.getItem('bs_scan_quota')||'{}');
+    const today = new Date().toDateString();
+    if (d.date !== today) return 0;
+    return d.count || 0;
+  } catch(e) { return 0; }
+}
+function incrementScanCount() {
+  try {
+    const today = new Date().toDateString();
+    const count = getScanCount() + 1;
+    localStorage.setItem('bs_scan_quota', JSON.stringify({ date: today, count }));
+  } catch(e) {}
+}
+const DAILY_SCAN_LIMIT = 20;
 
 // ── Scan Receipt ──────────────────────────────────────────
 let scanImageBase64 = null;
 let scannedItems = [];
 
 function openScanModal() {
+  haptic();
   scanImageBase64 = null;
   scannedItems = [];
   document.getElementById('scan-preview').style.display = 'none';
@@ -770,12 +865,22 @@ function openScanModal() {
   document.getElementById('scan-status').textContent = '';
   document.getElementById('scan-status').className = 'scan-status';
   document.getElementById('scan-confirm-btn').style.display = 'none';
+  document.getElementById('scan-retry-btn').style.display = 'none';
+  document.getElementById('scan-items-editor').style.display = 'none';
   document.getElementById('scan-file-input').value = '';
   document.getElementById('scan-camera-input').value = '';
 
   if (!getApiKey()) {
     document.getElementById('scan-status').className = 'scan-status error';
     document.getElementById('scan-status').textContent = '⚠️ No API key set. Tap ⚙️ in the header first to add your free Groq API key.';
+  } else {
+    const count = getScanCount();
+    if (count >= DAILY_SCAN_LIMIT) {
+      document.getElementById('scan-status').className = 'scan-status error';
+      document.getElementById('scan-status').textContent = `⚠️ Daily scan limit reached (${DAILY_SCAN_LIMIT}/day). Resets at midnight.`;
+    } else if (count > 0) {
+      document.getElementById('scan-status').textContent = `${count}/${DAILY_SCAN_LIMIT} scans used today.`;
+    }
   }
 
   document.getElementById('scan-modal').classList.add('open');
@@ -789,29 +894,40 @@ function handleModalBackdrop(e) {
   if (e.target === document.getElementById('scan-modal')) closeScanModal();
 }
 
-function getMediaType(file) {
-  // Detect actual media type from file, fall back to image/jpeg
-  const t = file.type;
-  if (t === 'image/png') return 'image/png';
-  if (t === 'image/gif') return 'image/gif';
-  if (t === 'image/webp') return 'image/webp';
-  return 'image/jpeg'; // covers JPEG, HEIC, and unknowns — canvas will convert
+function reScan() {
+  haptic();
+  scanImageBase64 = null;
+  scannedItems = [];
+  document.getElementById('scan-preview').style.display = 'none';
+  document.getElementById('scan-drop').style.display = 'flex';
+  document.getElementById('scan-status').textContent = '';
+  document.getElementById('scan-status').className = 'scan-status';
+  document.getElementById('scan-confirm-btn').style.display = 'none';
+  document.getElementById('scan-retry-btn').style.display = 'none';
+  document.getElementById('scan-items-editor').style.display = 'none';
+  document.getElementById('scan-file-input').value = '';
+  document.getElementById('scan-camera-input').value = '';
 }
 
 function handleScanFile(input) {
   const file = input.files[0];
   if (!file) return;
 
+  if (getScanCount() >= DAILY_SCAN_LIMIT) {
+    const status = document.getElementById('scan-status');
+    status.className = 'scan-status error';
+    status.textContent = `⚠️ Daily scan limit reached (${DAILY_SCAN_LIMIT}/day). Resets at midnight.`;
+    return;
+  }
+
   const status = document.getElementById('scan-status');
   status.className = 'scan-status';
   status.textContent = '⏳ Loading image…';
 
-  // Always convert to JPEG via canvas to handle HEIC and other formats
   const img = new Image();
   const objectUrl = URL.createObjectURL(file);
   img.onload = async () => {
     URL.revokeObjectURL(objectUrl);
-    // Draw on canvas and export as JPEG (max 1600px wide to keep size reasonable)
     const canvas = document.createElement('canvas');
     const MAX = 1600;
     let w = img.naturalWidth, h = img.naturalHeight;
@@ -838,9 +954,12 @@ function handleScanFile(input) {
 async function analyseReceipt() {
   const status = document.getElementById('scan-status');
   const confirmBtn = document.getElementById('scan-confirm-btn');
+  const retryBtn = document.getElementById('scan-retry-btn');
   status.className = 'scan-status';
   status.textContent = '🔍 Reading receipt with AI…';
   confirmBtn.style.display = 'none';
+  retryBtn.style.display = 'none';
+  document.getElementById('scan-items-editor').style.display = 'none';
   scannedItems = [];
 
   try {
@@ -864,30 +983,25 @@ async function analyseReceipt() {
         messages: [{
           role: 'user',
           content: [
-            {
-              type: 'image_url',
-              image_url: { url: `data:image/jpeg;base64,${scanImageBase64}` }
-            },
-            {
-              type: 'text',
-              text: `You are a receipt parser. Extract every line item from this receipt image.
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${scanImageBase64}` } },
+            { type: 'text', text: `You are a receipt parser. Extract every line item from this receipt image.
 Return ONLY a JSON array, no explanation, no markdown, no extra text, no code fences.
 Each object must have:
 - "name": string (item name, keep it short)
 - "price": number (final price for that line, as a positive number)
 Ignore subtotals, totals, tax lines, service charge lines, discounts, and headers.
 Only include individual food/drink/product items.
-Example: [{"name":"Chicken Rice","price":4.50},{"name":"Teh Tarik","price":1.80}]`
-            }
+Example: [{"name":"Chicken Rice","price":4.50},{"name":"Teh Tarik","price":1.80}]` }
           ]
         }]
       })
     });
 
+    incrementScanCount();
+
     if (!response.ok) {
       const errBody = await response.json().catch(() => ({}));
-      const msg = errBody?.error?.message || `HTTP ${response.status}`;
-      throw new Error(msg);
+      throw new Error(errBody?.error?.message || `HTTP ${response.status}`);
     }
 
     const data = await response.json();
@@ -901,20 +1015,61 @@ Example: [{"name":"Chicken Rice","price":4.50},{"name":"Teh Tarik","price":1.80}
     scannedItems = JSON.parse(raw);
     if (!Array.isArray(scannedItems) || scannedItems.length === 0) throw new Error('No items found in receipt');
 
-    const list = scannedItems.map(i => `${i.name} — $${parseFloat(i.price).toFixed(2)}`).join('\n');
     status.className = 'scan-status success';
-    status.innerHTML = `✅ Found ${scannedItems.length} item${scannedItems.length > 1 ? 's' : ''}:<br><span style="white-space:pre-line;font-size:12px;">${list}</span>`;
+    status.textContent = `✅ Found ${scannedItems.length} item${scannedItems.length > 1 ? 's' : ''} — review below:`;
+    renderScanItemsEditor();
+    document.getElementById('scan-items-editor').style.display = 'block';
     confirmBtn.style.display = '';
+    retryBtn.style.display = '';
 
   } catch (err) {
     console.error('Scan error:', err);
     status.className = 'scan-status error';
     status.textContent = `❌ ${err.message || 'Could not read receipt'}. Please try again or add items manually.`;
+    retryBtn.style.display = '';
   }
 }
 
+function renderScanItemsEditor() {
+  const list = document.getElementById('scan-items-list');
+  list.innerHTML = scannedItems.map((item, idx) => `
+    <div class="scan-item-row" id="scan-row-${idx}">
+      <input type="text" value="${escAttr(item.name)}" placeholder="Item name" oninput="updateScanItem(${idx},'name',this.value)" />
+      <input type="number" value="${parseFloat(item.price).toFixed(2)}" placeholder="0.00" min="0" step="0.01" oninput="updateScanItem(${idx},'price',this.value)" />
+      <button class="icon-btn" onclick="removeScanItem(${idx})" aria-label="Remove"><i class="ti ti-trash" style="color:#e24b4a;font-size:15px;"></i></button>
+    </div>`).join('');
+}
+
+function updateScanItem(idx, field, val) {
+  if (scannedItems[idx]) scannedItems[idx][field] = field === 'price' ? parseFloat(val)||0 : val;
+}
+
+function removeScanItem(idx) {
+  haptic();
+  scannedItems.splice(idx, 1);
+  renderScanItemsEditor();
+  if (!scannedItems.length) {
+    document.getElementById('scan-confirm-btn').style.display = 'none';
+    document.getElementById('scan-status').textContent = 'All items removed. Re-scan or cancel.';
+  }
+}
+
+function addScanItemRow() {
+  haptic();
+  scannedItems.push({ name: '', price: 0 });
+  renderScanItemsEditor();
+  // Focus the new name input
+  setTimeout(() => {
+    const rows = document.querySelectorAll('.scan-item-row');
+    if (rows.length) rows[rows.length-1].querySelector('input[type="text"]').focus();
+  }, 50);
+  document.getElementById('scan-confirm-btn').style.display = '';
+}
+
 function confirmScan() {
+  haptic();
   scannedItems.forEach(si => {
+    if (!si.name && !si.price) return; // skip empty rows
     const id = ++itemId;
     const personQty = {};
     people.forEach(p => { personQty[p] = 0; });
@@ -928,14 +1083,18 @@ function confirmScan() {
       splitMode: 'all'
     });
   });
-  renderItems();
-  saveDraft();
+  renderItems(); calculate(); saveDraft();
   closeScanModal();
 }
-// ─────────────────────────────────────────────────────────
 
+// ── Init ──────────────────────────────────────────────────
 function init() {
   loadDraft();
+
+  // Set currency selector
+  const sel = document.getElementById('currency-select');
+  sel.value = currency;
+
   renderPeople();
   renderItems();
   if (items.length) calculate();
