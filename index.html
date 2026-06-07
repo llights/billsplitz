@@ -816,7 +816,7 @@ function resetAll() {
 
 // ── API Key ───────────────────────────────────────────────
 function getApiKey() {
-  try { return localStorage.getItem('bs_groq_key') || ''; } catch(e) { return ''; }
+  return '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';
 }
 function saveApiKey(key) {
   try { localStorage.setItem('bs_groq_key', key.trim()); } catch(e) {}
