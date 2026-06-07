@@ -417,7 +417,7 @@
     <option value="A$">A$</option>
     <option value="HK$">HK$</option>
   </select>
-  <button onclick="openSettings()" style="background:none;border:none;padding:6px;color:var(--text2);" title="API Key settings"><i class="ti ti-settings" style="font-size:20px;"></i></button>
+
 </header>
 
 <main>
@@ -814,24 +814,10 @@ function resetAll() {
   try { localStorage.removeItem('bs_draft'); } catch(e){}
 }
 
-// ── API Key ───────────────────────────────────────────────
-function getApiKey() {
-  return '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';
-}
-function saveApiKey(key) {
-  try { localStorage.setItem('bs_groq_key', key.trim()); } catch(e) {}
-}
+// ── Settings ─────────────────────────────────────────────
 function openSettings() {
   haptic();
-  const current = getApiKey();
-  const key = prompt('Enter your Groq API key:\n\nGet a FREE key at console.groq.com → Sign in → API Keys → Create API key', current);
-  if (key === null) return;
-  if (key.trim()) {
-    saveApiKey(key.trim());
-    alert('✅ Groq API key saved! You can now use Scan Receipt.');
-  } else {
-    if (confirm('Remove saved API key?')) saveApiKey('');
-  }
+  alert('This app is ready to use — no setup needed!');
 }
 
 // ── Scan quota guard ──────────────────────────────────────
@@ -870,10 +856,7 @@ function openScanModal() {
   document.getElementById('scan-file-input').value = '';
   document.getElementById('scan-camera-input').value = '';
 
-  if (!getApiKey()) {
-    document.getElementById('scan-status').className = 'scan-status error';
-    document.getElementById('scan-status').textContent = '⚠️ No API key set. Tap ⚙️ in the header first to add your free Groq API key.';
-  } else {
+  {
     const count = getScanCount();
     if (count >= DAILY_SCAN_LIMIT) {
       document.getElementById('scan-status').className = 'scan-status error';
@@ -963,19 +946,9 @@ async function analyseReceipt() {
   scannedItems = [];
 
   try {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      status.className = 'scan-status error';
-      status.textContent = '❌ No API key set. Tap ⚙️ in the header to add your free Groq API key.';
-      return;
-    }
-
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch('https://billsplitz.llianglengg.workers.dev', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'meta-llama/llama-4-scout-17b-16e-instruct',
         max_tokens: 1000,
